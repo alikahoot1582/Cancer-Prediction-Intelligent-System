@@ -7,10 +7,12 @@ import os
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 MODEL_PATH = os.path.join(BASE_DIR, "model", "model.pkl")
 SCALER_PATH = os.path.join(BASE_DIR, "model", "scaler.pkl")
 FEATURES_PATH = os.path.join(BASE_DIR, "model", "features.pkl")
 DATA_PATH = os.path.join(BASE_DIR, "data", "data.csv")
+CSS_PATH = os.path.join(BASE_DIR, "assets", "style.css")
 
 
 @st.cache_data
@@ -47,17 +49,14 @@ def add_sidebar(data):
 
 def prepare_input(input_dict, scaler, features):
     input_array = np.array([input_dict[f] for f in features]).reshape(1, -1)
-    input_scaled = scaler.transform(input_array)
-    return input_scaled
+    return scaler.transform(input_array)
 
 
 def plot_radar(input_dict):
-    # Use only "mean" features for radar
-    keys = [k for k in input_dict if "_mean" in k]
+    mean_keys = [k for k in input_dict if "_mean" in k]
 
-    values = [input_dict[k] for k in keys]
-
-    categories = [k.replace("_mean", "").title() for k in keys]
+    values = [input_dict[k] for k in mean_keys]
+    categories = [k.replace("_mean", "").title() for k in mean_keys]
 
     fig = go.Figure()
 
@@ -80,9 +79,9 @@ def predict(input_dict, model, scaler, features):
     input_scaled = prepare_input(input_dict, scaler, features)
 
     prediction = model.predict(input_scaled)[0]
-    probabilities = model.predict_proba(input_scaled)[0]
+    probs = model.predict_proba(input_scaled)[0]
 
-    return prediction, probabilities
+    return prediction, probs
 
 
 def main():
@@ -92,14 +91,16 @@ def main():
         layout="wide"
     )
 
-    # Load data & model
+    # Load CSS safely
+    if os.path.exists(CSS_PATH):
+        with open(CSS_PATH) as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
     data = load_data()
     model, scaler, features = load_model()
 
-    # Sidebar
     input_dict = add_sidebar(data)
 
-    # Title
     st.title("Breast Cancer Predictor")
     st.write(
         "This app predicts whether a tumor is **benign or malignant** "
