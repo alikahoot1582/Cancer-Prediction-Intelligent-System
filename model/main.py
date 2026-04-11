@@ -13,7 +13,6 @@ DATA_PATH = os.path.join(BASE_DIR, "data", "data.csv")
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "model.pkl")
 SCALER_PATH = os.path.join(os.path.dirname(__file__), "scaler.pkl")
-FEATURES_PATH = os.path.join(os.path.dirname(__file__), "features.pkl")
 
 
 def load_data():
@@ -28,8 +27,6 @@ def load_data():
 def train_model(data):
     X = data.drop('diagnosis', axis=1)
     y = data['diagnosis']
-
-    feature_names = X.columns.tolist()
 
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
@@ -46,24 +43,21 @@ def train_model(data):
     print("Accuracy:", accuracy_score(y_test, y_pred))
     print("\nClassification Report:\n", classification_report(y_test, y_pred))
 
-    return model, scaler, feature_names
+    return model, scaler
 
 
-def save_artifacts(model, scaler, features):
+def save_artifacts(model, scaler):
     with open(MODEL_PATH, "wb") as f:
         pickle.dump(model, f)
 
     with open(SCALER_PATH, "wb") as f:
         pickle.dump(scaler, f)
 
-    with open(FEATURES_PATH, "wb") as f:
-        pickle.dump(features, f)
-
 
 def main():
     data = load_data()
-    model, scaler, features = train_model(data)
-    save_artifacts(model, scaler, features)
+    model, scaler = train_model(data)
+    save_artifacts(model, scaler)
 
 
 if __name__ == "__main__":
