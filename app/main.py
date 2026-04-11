@@ -121,7 +121,7 @@ def main():
 
     st.title("Breast Cancer Predictor")
     st.write(
-        "Predicts whether a tumor is **benign or malignant** "
+        "Predicts whether a tumor is **benign (Not Cancerous) or malignant (Cancerous)** "
         "based on cell measurements."
     )
 
