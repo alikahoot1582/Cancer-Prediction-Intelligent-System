@@ -10,7 +10,6 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 MODEL_PATH = os.path.join(BASE_DIR, "model", "model.pkl")
 SCALER_PATH = os.path.join(BASE_DIR, "model", "scaler.pkl")
-FEATURES_PATH = os.path.join(BASE_DIR, "model", "features.pkl")
 DATA_PATH = os.path.join(BASE_DIR, "data", "data.csv")
 CSS_PATH = os.path.join(BASE_DIR, "assets", "style.css")
 
@@ -27,8 +26,7 @@ def load_data():
 def load_model():
     model = pickle.load(open(MODEL_PATH, "rb"))
     scaler = pickle.load(open(SCALER_PATH, "rb"))
-    features = pickle.load(open(FEATURES_PATH, "rb"))
-    return model, scaler, features
+    return model, scaler
 
 
 def add_sidebar(data):
@@ -47,8 +45,9 @@ def add_sidebar(data):
     return input_dict
 
 
-def prepare_input(input_dict, scaler, features):
-    input_array = np.array([input_dict[f] for f in features]).reshape(1, -1)
+def prepare_input(input_dict, scaler, data):
+    feature_order = data.drop('diagnosis', axis=1).columns
+    input_array = np.array([input_dict[col] for col in feature_order]).reshape(1, -1)
     return scaler.transform(input_array)
 
 
@@ -63,20 +62,19 @@ def plot_radar(input_dict):
     fig.add_trace(go.Scatterpolar(
         r=values,
         theta=categories,
-        fill='toself',
-        name='Mean Features'
+        fill='toself'
     ))
 
     fig.update_layout(
         polar=dict(radialaxis=dict(visible=True)),
-        showlegend=True
+        showlegend=False
     )
 
     return fig
 
 
-def predict(input_dict, model, scaler, features):
-    input_scaled = prepare_input(input_dict, scaler, features)
+def predict(input_dict, model, scaler, data):
+    input_scaled = prepare_input(input_dict, scaler, data)
 
     prediction = model.predict(input_scaled)[0]
     probs = model.predict_proba(input_scaled)[0]
@@ -97,14 +95,14 @@ def main():
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
     data = load_data()
-    model, scaler, features = load_model()
+    model, scaler = load_model()
 
     input_dict = add_sidebar(data)
 
     st.title("Breast Cancer Predictor")
     st.write(
-        "This app predicts whether a tumor is **benign or malignant** "
-        "based on cell nuclei measurements."
+        "Predicts whether a tumor is **benign or malignant** "
+        "based on cell measurements."
     )
 
     col1, col2 = st.columns([3, 1])
@@ -115,7 +113,7 @@ def main():
     with col2:
         st.subheader("Prediction")
 
-        prediction, probs = predict(input_dict, model, scaler, features)
+        prediction, probs = predict(input_dict, model, scaler, data)
 
         if prediction == 0:
             st.success("✅ Benign")
@@ -125,10 +123,7 @@ def main():
         st.write(f"Benign Probability: {probs[0]:.4f}")
         st.write(f"Malignant Probability: {probs[1]:.4f}")
 
-        st.info(
-            "⚠️ This tool assists medical analysis but is NOT a replacement "
-            "for professional diagnosis."
-        )
+        st.info("⚠️ Not a substitute for professional medical diagnosis.")
 
 
 if __name__ == "__main__":
