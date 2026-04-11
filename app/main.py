@@ -10,7 +10,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODEL_PATH = os.path.join(BASE_DIR, "model", "model.pkl")
 SCALER_PATH = os.path.join(BASE_DIR, "model", "scaler.pkl")
 FEATURES_PATH = os.path.join(BASE_DIR, "model", "features.pkl")
-DATA_PATH = os.path.join(BASE_DIR, "model", "data.csv")
+DATA_PATH = os.path.join(BASE_DIR, "data", "data.csv")
 
 
 @st.cache_data
