@@ -154,18 +154,18 @@ def main():
         st.info("⚠️ Not a substitute for professional medical diagnosis.")
 
         # -------- PDF DOWNLOAD --------
-        st.markdown("### 📘 Prevention Guide")
+st.markdown("### 📘 Prevention Guide")
 
-        if os.path.exists(PDF_PATH):
-            with open(PDF_PATH, "rb") as f:
-                st.download_button(
-                    label="📄 Download Prevention PDF",
-                    data=f,
-                    file_name="app/preventions.pdf",
-                    mime="application/pdf"
-                )
-        else:
-            st.warning("Prevention PDF not found.")
+if os.path.exists(PDF_PATH):
+    with open(PDF_PATH, "rb") as f:
+        st.download_button(
+            label="📄 Download Prevention PDF",
+            data=f,
+            file_name="preventions.pdf",  # ✅ only filename
+            mime="application/pdf"
+        )
+else:
+    st.warning("Prevention PDF not found.")
 
     # -------- FOOTER --------
     st.markdown("---")
