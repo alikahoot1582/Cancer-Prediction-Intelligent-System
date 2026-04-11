@@ -161,7 +161,7 @@ def main():
                 st.download_button(
                     label="📄 Download Prevention PDF",
                     data=f,
-                    file_name="preventions.pdf",
+                    file_name="app/preventions.pdf",
                     mime="application/pdf"
                 )
         else:
