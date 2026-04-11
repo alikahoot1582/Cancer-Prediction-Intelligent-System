@@ -6,14 +6,16 @@ import plotly.graph_objects as go
 import os
 from sklearn.metrics import accuracy_score
 
-# Paths
+# -------------------- PATHS --------------------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 MODEL_PATH = os.path.join(BASE_DIR, "model", "model.pkl")
 SCALER_PATH = os.path.join(BASE_DIR, "model", "scaler.pkl")
 DATA_PATH = os.path.join(BASE_DIR, "data", "data.csv")
 CSS_PATH = os.path.join(BASE_DIR, "assets", "style.css")
-PDF_PATH = os.path.join(BASE_DIR, "assets", "preventions.pdf")
+
+# IMPORTANT: PDF is in app folder with main.py
+PDF_PATH = os.path.join(BASE_DIR, "app", "preventions.pdf")
 
 
 # -------------------- LOAD DATA --------------------
@@ -95,8 +97,7 @@ def get_model_accuracy(model, scaler, data):
     X_scaled = scaler.transform(X)
     y_pred = model.predict(X_scaled)
 
-    acc = accuracy_score(y, y_pred)
-    return acc * 100
+    return accuracy_score(y, y_pred) * 100
 
 
 # -------------------- MAIN APP --------------------
@@ -112,7 +113,7 @@ def main():
         with open(CSS_PATH) as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-    # Load resources
+    # Load data & model
     data = load_data()
     model, scaler = load_model()
 
@@ -125,17 +126,17 @@ def main():
     # Title
     st.title("Breast Cancer Predictor")
     st.write(
-        "Predicts whether a tumor is **benign (Not Cancerous) or malignant (Cancerous)** "
-        "based on cell measurements."
+        "Predicts whether a tumor is **benign (Not Cancerous)** or "
+        "**malignant (Cancerous)** based on cell measurements."
     )
 
     col1, col2 = st.columns([3, 1])
 
-    # -------- LEFT: RADAR --------
+    # ---------------- LEFT SIDE ----------------
     with col1:
         st.plotly_chart(plot_radar(input_dict), use_container_width=True)
 
-    # -------- RIGHT: RESULTS --------
+    # ---------------- RIGHT SIDE ----------------
     with col2:
         st.subheader("Prediction")
 
@@ -153,25 +154,25 @@ def main():
 
         st.info("⚠️ Not a substitute for professional medical diagnosis.")
 
-        # -------- PDF DOWNLOAD --------
-st.markdown("### 📘 Prevention Guide")
+        # ---------------- PDF DOWNLOAD ----------------
+        st.markdown("### 📘 Prevention Guide")
 
-if os.path.exists(PDF_PATH):
-    with open(PDF_PATH, "rb") as f:
-        st.download_button(
-            label="📄 Download Prevention PDF",
-            data=f,
-            file_name="preventions.pdf",  # ✅ only filename
-            mime="application/pdf"
-        )
-else:
-    st.warning("Prevention PDF not found.")
+        if os.path.exists(PDF_PATH):
+            with open(PDF_PATH, "rb") as f:
+                st.download_button(
+                    label="📄 Download Prevention PDF",
+                    data=f,
+                    file_name="preventions.pdf",
+                    mime="application/pdf"
+                )
+        else:
+            st.warning("Prevention PDF not found.")
 
-    # -------- FOOTER --------
+    # ---------------- FOOTER ----------------
     st.markdown("---")
     st.markdown("### Made by Muhammad Ali Kahoot")
 
 
-# Run app
+# RUN APP
 if __name__ == "__main__":
     main()
