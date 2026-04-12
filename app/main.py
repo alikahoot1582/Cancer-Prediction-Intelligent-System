@@ -6,173 +6,157 @@ import plotly.graph_objects as go
 import os
 from sklearn.metrics import accuracy_score
 
-# -------------------- PATHS --------------------
+# -------------------- CONFIG --------------------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-MODEL_PATH = os.path.join(BASE_DIR, "model", "model.pkl")
-SCALER_PATH = os.path.join(BASE_DIR, "model", "scaler.pkl")
-DATA_PATH = os.path.join(BASE_DIR, "data", "data.csv")
-CSS_PATH = os.path.join(BASE_DIR, "assets", "style.css")
+PATHS = {
+    "model": os.path.join(BASE_DIR, "model", "model.pkl"),
+    "scaler": os.path.join(BASE_DIR, "model", "scaler.pkl"),
+    "data": os.path.join(BASE_DIR, "data", "data.csv"),
+    "css": os.path.join(BASE_DIR, "assets", "style.css"),
+    "pdf": os.path.join(BASE_DIR, "app", "preventions.pdf")
+}
 
-# IMPORTANT: PDF is in app folder with main.py
-PDF_PATH = os.path.join(BASE_DIR, "app", "preventions.pdf")
-
-
-# -------------------- LOAD DATA --------------------
+# -------------------- LOADERS --------------------
 @st.cache_data
-def load_data():
-    data = pd.read_csv(DATA_PATH)
-    data = data.drop(columns=['Unnamed: 32', 'id'], errors='ignore')
-    data['diagnosis'] = data['diagnosis'].map({'M': 1, 'B': 0})
-    return data
+def load_data(path):
+    df = pd.read_csv(path)
+    df = df.drop(columns=['Unnamed: 32', 'id'], errors='ignore')
+    df['diagnosis'] = df['diagnosis'].map({'M': 1, 'B': 0})
+    return df
 
 
-# -------------------- LOAD MODEL --------------------
 @st.cache_resource
-def load_model():
-    model = pickle.load(open(MODEL_PATH, "rb"))
-    scaler = pickle.load(open(SCALER_PATH, "rb"))
+def load_model(model_path, scaler_path):
+    model = pickle.load(open(model_path, "rb"))
+    scaler = pickle.load(open(scaler_path, "rb"))
     return model, scaler
 
 
-# -------------------- SIDEBAR --------------------
-def add_sidebar(data):
+# -------------------- UI COMPONENTS --------------------
+def sidebar_inputs(data):
     st.sidebar.header("Cell Nuclei Measurements")
-    input_dict = {}
+    features = data.drop('diagnosis', axis=1)
 
-    for col in data.drop('diagnosis', axis=1).columns:
-        input_dict[col] = st.sidebar.slider(
-            col,
-            float(data[col].min()),
-            float(data[col].max()),
-            float(data[col].mean())
-        )
-
-    return input_dict
-
-
-# -------------------- PREP INPUT --------------------
-def prepare_input(input_dict, scaler, data):
-    feature_order = data.drop('diagnosis', axis=1).columns
-    input_array = np.array([input_dict[col] for col in feature_order]).reshape(1, -1)
-    return scaler.transform(input_array)
+    return {
+        col: st.sidebar.slider(
+            label=col,
+            min_value=float(features[col].min()),
+            max_value=float(features[col].max()),
+            value=float(features[col].mean())
+        ) for col in features.columns
+    }
 
 
-# -------------------- RADAR CHART --------------------
-def plot_radar(input_dict):
-    mean_keys = [k for k in input_dict if "_mean" in k]
+# -------------------- DATA PROCESSING --------------------
+def prepare_input(input_dict, scaler, feature_order):
+    arr = np.array([input_dict[col] for col in feature_order]).reshape(1, -1)
+    return scaler.transform(arr)
 
-    values = [input_dict[k] for k in mean_keys]
-    categories = [k.replace("_mean", "").title() for k in mean_keys]
+
+# -------------------- VISUALIZATION --------------------
+def radar_chart(input_dict):
+    keys = [k for k in input_dict if "_mean" in k]
 
     fig = go.Figure()
-
     fig.add_trace(go.Scatterpolar(
-        r=values,
-        theta=categories,
+        r=[input_dict[k] for k in keys],
+        theta=[k.replace("_mean", "").title() for k in keys],
         fill='toself'
     ))
 
-    fig.update_layout(
-        polar=dict(radialaxis=dict(visible=True)),
-        showlegend=False
-    )
-
+    fig.update_layout(polar=dict(radialaxis=dict(visible=True)), showlegend=False)
     return fig
 
 
-# -------------------- PREDICTION --------------------
-def predict(input_dict, model, scaler, data):
-    input_scaled = prepare_input(input_dict, scaler, data)
-    prediction = model.predict(input_scaled)[0]
-    probs = model.predict_proba(input_scaled)[0]
-    return prediction, probs
+# -------------------- MODEL LOGIC --------------------
+def make_prediction(input_dict, model, scaler, feature_order):
+    scaled = prepare_input(input_dict, scaler, feature_order)
+    pred = model.predict(scaled)[0]
+    probs = model.predict_proba(scaled)[0]
+    return pred, probs
 
 
-# -------------------- ACCURACY --------------------
-def get_model_accuracy(model, scaler, data):
+def calculate_accuracy(model, scaler, data):
     X = data.drop('diagnosis', axis=1)
     y = data['diagnosis']
 
-    X_scaled = scaler.transform(X)
-    y_pred = model.predict(X_scaled)
-
-    return accuracy_score(y, y_pred) * 100
+    preds = model.predict(scaler.transform(X))
+    return accuracy_score(y, preds) * 100
 
 
 # -------------------- MAIN APP --------------------
+# Logo path
+LOGO_PATH = os.path.join(BASE_DIR, "app", "logo2.png")
 def main():
     st.set_page_config(
-        page_title="Breast Cancer Predictor",
-        page_icon="👩‍⚕️",
+        page_title="BioSync Lifeguard ❤️",
+        page_icon="❤️",
         layout="wide"
     )
 
-    # Load CSS
-    if os.path.exists(CSS_PATH):
-        with open(CSS_PATH) as f:
+    # Load styles
+    if os.path.exists(PATHS["css"]):
+        with open(PATHS["css"]) as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-    # Load data & model
-    data = load_data()
-    model, scaler = load_model()
+    # Load resources
+    data = load_data(PATHS["data"])
+    model, scaler = load_model(PATHS["model"], PATHS["scaler"])
 
-    # Sidebar input
-    input_dict = add_sidebar(data)
+    feature_order = data.drop('diagnosis', axis=1).columns
+    inputs = sidebar_inputs(data)
 
-    # Accuracy
-    accuracy = get_model_accuracy(model, scaler, data)
+    accuracy = calculate_accuracy(model, scaler, data)
 
-    # Title
-    st.title("Breast Cancer Predictor")
-    st.write(
-        "Predicts whether a tumor is **benign (Not Cancerous)** or "
-        "**malignant (Cancerous)** based on cell measurements."
-    )
+    # Header
+    if os.path.exists(LOGO_PATH):
+        st.image(LOGO_PATH, width=120)
+
+    st.title("BioSync Lifeguard ❤️")
+    st.write("Predicts tumor type: **Benign** or **Malignant** based on cell data.")
 
     col1, col2 = st.columns([3, 1])
 
-    # ---------------- LEFT SIDE ----------------
+    # Left panel
     with col1:
-        st.plotly_chart(plot_radar(input_dict), use_container_width=True)
+        st.plotly_chart(radar_chart(inputs), use_container_width=True)
 
-    # ---------------- RIGHT SIDE ----------------
+    # Right panel
     with col2:
         st.subheader("Prediction")
 
-        prediction, probs = predict(input_dict, model, scaler, data)
+        pred, probs = make_prediction(inputs, model, scaler, feature_order)
 
-        if prediction == 0:
+        if pred == 0:
             st.success("✅ Benign")
         else:
             st.error("⚠️ Malignant")
 
         st.write(f"Benign Probability: {probs[0]:.4f}")
         st.write(f"Malignant Probability: {probs[1]:.4f}")
-
         st.write(f"Model Accuracy: {accuracy:.2f}%")
 
-        st.info("⚠️ Not a substitute for professional medical diagnosis.")
+        st.info("⚠️ Not a substitute for professional medical advice.")
 
-        # ---------------- PDF DOWNLOAD ----------------
+        # PDF Download
         st.markdown("### 📘 Prevention Guide")
 
-        if os.path.exists(PDF_PATH):
-            with open(PDF_PATH, "rb") as f:
+        if os.path.exists(PATHS["pdf"]):
+            with open(PATHS["pdf"], "rb") as f:
                 st.download_button(
-                    label="📄 Download Prevention PDF",
+                    label="📄 Download PDF",
                     data=f,
                     file_name="preventions.pdf",
                     mime="application/pdf"
                 )
         else:
-            st.warning("Prevention PDF not found.")
+            st.warning("PDF not found.")
 
-    # ---------------- FOOTER ----------------
+    # Footer
     st.markdown("---")
     st.markdown("### Made by Muhammad Ali Kahoot")
 
 
-# RUN APP
 if __name__ == "__main__":
     main()
