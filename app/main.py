@@ -19,7 +19,7 @@ PATHS = {
 }
 
 # -------------------- GROQ --------------------
-API_KEY = "your_groq_api_key_here"   # 👈 replace
+API_KEY = "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"
 client = Groq(api_key=API_KEY)
 
 # -------------------- LOADERS --------------------
