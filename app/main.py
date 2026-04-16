@@ -139,7 +139,7 @@ def generate_ai_analysis(input_dict, prediction, probs, mode):
 # -------------------- MAIN --------------------
 def main():
     st.set_page_config(
-        page_title=" 🩺 Breast Cancer Risk Assistant",
+        page_title=" Breast Cancer Risk Assistant",
         page_icon= "🩺" ,
         layout="wide"
     )
@@ -157,8 +157,8 @@ def main():
     inputs = sidebar_inputs(data)
     accuracy = calculate_accuracy(model, scaler, data)
 
-    # Header (NO LOGO)
-    st.title("Breast Cancer Risk Assistant")
+    # Header 
+    st.title("🩺 Breast Cancer Risk Assistant")
     st.write("This tool estimates whether a tumor is likely **benign or malignant** based on cell measurements.")
 
     # ⚠️ STRONG DISCLAIMER
