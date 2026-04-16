@@ -139,7 +139,7 @@ def generate_ai_analysis(input_dict, prediction, probs, mode):
 # -------------------- MAIN --------------------
 def main():
     st.set_page_config(
-        page_title=" 🩺 Breast Cancer Risk Assistant"
+        page_title=" 🩺 Breast Cancer Risk Assistant",
         page_icon= "🩺" ,
         layout="wide"
     )
