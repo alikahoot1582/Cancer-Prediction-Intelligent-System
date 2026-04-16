@@ -122,7 +122,7 @@ def generate_ai_analysis(input_dict, prediction, probs, mode):
         """
 
         response = client.chat.completions.create(
-            model="llama3-70b-8192",
+            model="openai/gpt-oss-120b",
             messages=[
                 {"role": "system", "content": "You are a helpful and careful medical assistant."},
                 {"role": "user", "content": prompt}
