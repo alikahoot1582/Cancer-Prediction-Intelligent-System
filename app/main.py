@@ -38,9 +38,9 @@ def load_model(model_path, scaler_path):
     return model, scaler
 
 
-# -------------------- UI INPUT --------------------
+# -------------------- SIDEBAR INPUT --------------------
 def sidebar_inputs(data):
-    st.sidebar.header("Cell Measurements (Breast Tissue)")
+    st.sidebar.header("Cell Measurements")
     features = data.drop('diagnosis', axis=1)
 
     inputs = {}
@@ -54,7 +54,7 @@ def sidebar_inputs(data):
     return inputs
 
 
-# -------------------- PROCESS --------------------
+# -------------------- PREP --------------------
 def prepare_input(input_dict, scaler, feature_order):
     arr = np.array([input_dict[col] for col in feature_order]).reshape(1, -1)
     return scaler.transform(arr)
@@ -91,65 +91,44 @@ def calculate_accuracy(model, scaler, data):
 
 
 # -------------------- AI ANALYSIS --------------------
-def generate_ai_analysis(input_dict, prediction, probs, mode):
-    try:
-        if mode == "Basic":
-            style = "Explain in very simple, short, patient-friendly language."
-        else:
-            style = "Give a detailed but still easy-to-understand explanation."
+def generate_ai_analysis(input_dict, prediction, probs, mode, chat_history=None):
+    style = "simple and short" if mode == "Basic" else "detailed but clear"
 
-        prompt = f"""
-        You are a compassionate breast cancer awareness assistant.
+    base_prompt = f"""
+    You are a careful medical assistant.
 
-        Result: {"Malignant (higher risk)" if prediction == 1 else "Benign (lower risk)"}
-        Probabilities: {probs}
+    Prediction: {"Malignant" if prediction else "Benign"}
+    Probabilities: {probs}
 
-        Patient data: {input_dict}
+    Explain in a {style} way.
 
-        {style}
+    Include meaning, risk level, next steps, and prevention.
+    Always remind this is NOT a diagnosis.
+    """
 
-        Include:
-        - What this result means
-        - Whether the risk seems low or higher
-        - Practical next steps (doctor visit, screening, etc.)
-        - General prevention tips for breast health
-        - Reassurance without giving false certainty
+    messages = [{"role": "system", "content": base_prompt}]
 
-        IMPORTANT:
-        - Do NOT say this is a confirmed diagnosis
-        - Encourage consulting a doctor
-        - Keep tone calm and supportive
-        """
+    if chat_history:
+        messages.extend(chat_history)
 
-        response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=[
-                {"role": "system", "content": "You are a helpful and careful medical assistant."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.5
-        )
+    response = client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=messages,
+        temperature=0.5
+    )
 
-        return response.choices[0].message.content
-
-    except Exception as e:
-        return f"AI Error: {e}"
+    return response.choices[0].message.content
 
 
 # -------------------- MAIN --------------------
 def main():
-    st.set_page_config(
-        page_title=" Breast Cancer Risk Assistant",
-        page_icon= "🩺" ,
-        layout="wide"
-    )
+    st.set_page_config(page_title="Breast Cancer Assistant", page_icon="🩺", layout="wide")
 
     # Load CSS
     if os.path.exists(PATHS["css"]):
         with open(PATHS["css"]) as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-    # Load
     data = load_data(PATHS["data"])
     model, scaler = load_model(PATHS["model"], PATHS["scaler"])
 
@@ -157,62 +136,74 @@ def main():
     inputs = sidebar_inputs(data)
     accuracy = calculate_accuracy(model, scaler, data)
 
-    # Header 
+    # Header
     st.title("🩺 Breast Cancer Risk Assistant")
-    st.write("This tool estimates whether a tumor is likely **benign or malignant** based on cell measurements.")
+    st.caption("AI-powered educational tool for breast health awareness")
 
-    # ⚠️ STRONG DISCLAIMER
-    st.warning(
-        "⚠️ This tool is for educational purposes only and is NOT a medical diagnosis. "
-        "Always consult a qualified doctor for medical advice, diagnosis, or treatment."
-    )
+    st.warning("This is NOT a medical diagnosis. Always consult a doctor.")
 
-    col1, col2 = st.columns([3, 1])
+    # Chart
+    st.subheader("Cell Measurement Overview")
+    st.plotly_chart(radar_chart(inputs), use_container_width=True)
 
-    # LEFT
-    with col1:
-        st.plotly_chart(radar_chart(inputs), use_container_width=True)
+    # Prediction
+    pred, probs = make_prediction(inputs, model, scaler, feature_order)
 
-    # RIGHT
-    with col2:
-        st.subheader("Prediction")
+    st.subheader("Prediction")
+    col1, col2, col3 = st.columns(3)
 
-        pred, probs = make_prediction(inputs, model, scaler, feature_order)
+    col1.metric("Result", "Benign" if pred == 0 else "Malignant")
+    col2.metric("Benign %", f"{probs[0]:.2f}")
+    col3.metric("Accuracy", f"{accuracy:.2f}%")
 
-        if pred == 0:
-            st.success("Result: Likely Benign (Lower Risk)")
-        else:
-            st.error("Result: Possible Malignant (Higher Risk)")
-
-        st.write(f"Benign Probability: {probs[0]:.3f}")
-        st.write(f"Malignant Probability: {probs[1]:.3f}")
-        st.write(f"Model Accuracy: {accuracy:.2f}%")
-
-        # ---------------- AI MODE ----------------
-        st.markdown("### 🤖 AI Analysis")
-
-        mode = st.radio("Select Mode:", ["Basic", "Detailed"])
-
-        if st.button("Generate AI Analysis"):
-            with st.spinner("Analyzing your results..."):
-                analysis = generate_ai_analysis(inputs, pred, probs, mode)
-                st.write(analysis)
-
-        # ---------------- PDF ----------------
-        st.markdown("### 📘 Prevention Guide")
-
-        if os.path.exists(PATHS["pdf"]):
-            with open(PATHS["pdf"], "rb") as f:
-                st.download_button(
-                    "Download Prevention Guide",
-                    f,
-                    file_name="breast_cancer_prevention.pdf"
-                )
-        else:
-            st.info("Prevention guide not available.")
-
+    # Chat system
     st.markdown("---")
-    st.caption("Made for awareness and educational support only.")
+    st.subheader("🤖 AI Assistant")
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    mode = st.radio("Mode", ["Basic", "Detailed"], horizontal=True)
+
+    if st.button("Generate Analysis"):
+        reply = generate_ai_analysis(inputs, pred, probs, mode)
+        st.session_state.messages.append({"role": "assistant", "content": reply})
+
+    for msg in st.session_state.messages:
+        if msg["role"] == "assistant":
+            st.info(msg["content"])
+        else:
+            st.write(f"You: {msg['content']}")
+
+    user_input = st.text_input("Ask something...")
+
+    if user_input:
+        st.session_state.messages.append({"role": "user", "content": user_input})
+
+        reply = generate_ai_analysis(inputs, pred, probs, mode, st.session_state.messages)
+        st.session_state.messages.append({"role": "assistant", "content": reply})
+        st.rerun()
+
+    # FAQ
+    st.markdown("---")
+    st.subheader("FAQ")
+
+    with st.expander("Is this a diagnosis?"):
+        st.write("No, only a prediction model.")
+
+    with st.expander("Should I worry?"):
+        st.write("Consult a doctor for proper evaluation.")
+
+    with st.expander("What next?"):
+        st.write("Medical screening like mammogram or biopsy.")
+
+    # PDF
+    st.markdown("---")
+    if os.path.exists(PATHS["pdf"]):
+        with open(PATHS["pdf"], "rb") as f:
+            st.download_button("Download Prevention Guide", f, "guide.pdf")
+
+    st.caption("Educational use only")
 
 
 if __name__ == "__main__":
