@@ -129,6 +129,7 @@ def main():
     accuracy = calculate_accuracy(model, scaler, data)
 
     st.title("🩺 Breast Cancer Risk Assistant")
+    st.caption("AI-powered model that estimates whether a tumor is benign or malignant based on cell measurements.")
     st.warning("Not a medical diagnosis. Consult a doctor.")
 
     # Chart
