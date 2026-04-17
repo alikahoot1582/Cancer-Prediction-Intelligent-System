@@ -194,9 +194,15 @@ def main():
     with st.expander("Should I worry?"):
         st.write("Consult a doctor for proper evaluation.")
 
-    with st.expander("What next?"):
+    with st.expander("What are the next steps?"):
         st.write("Medical screening like mammogram or biopsy.")
 
+    with st.expander("How accurate is this model?"):
+        st.write(
+            "The model provides an estimate based on historical data and patterns. "
+        "While it may show high accuracy, it is not perfect and should not be relied "
+        "on for medical decisions. Always consult a healthcare professional."
+    )
     # PDF
     st.markdown("---")
     if os.path.exists(PATHS["pdf"]):
