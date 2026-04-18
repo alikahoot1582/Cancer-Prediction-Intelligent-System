@@ -5,65 +5,20 @@ import numpy as np
 import plotly.graph_objects as go
 import os
 from sklearn.metrics import accuracy_score
+from groq import Groq
 
 # ---------------- CONFIG ----------------
-st.set_page_config(
-    page_title="Breast Cancer Assistant",
-    page_icon="🩺",
-    layout="wide"
-)
-
-# ---------------- STYLING ----------------
-st.markdown("""
-<style>
-body {
-    background-color: #f4f7fb;
-}
-.block-container {
-    padding-top: 2rem;
-}
-.card {
-    background-color: white;
-    padding: 20px;
-    border-radius: 14px;
-    box-shadow: 0px 4px 15px rgba(0,0,0,0.05);
-    margin-bottom: 20px;
-}
-.title {
-    font-size: 30px;
-    font-weight: 700;
-    color: #1f3b4d;
-}
-.subtitle {
-    color: #6c757d;
-    margin-bottom: 10px;
-}
-.result-good {
-    color: #28a745;
-    font-size: 26px;
-    font-weight: bold;
-}
-.result-bad {
-    color: #dc3545;
-    font-size: 26px;
-    font-weight: bold;
-}
-.section-title {
-    font-size: 20px;
-    font-weight: 600;
-    margin-bottom: 10px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ---------------- PATHS ----------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 PATHS = {
-    "model": os.path.join(BASE_DIR, "model.pkl"),
-    "scaler": os.path.join(BASE_DIR, "scaler.pkl"),
-    "data": os.path.join(BASE_DIR, "data.csv")
+    "model": os.path.join(BASE_DIR, "model", "model.pkl"),
+    "scaler": os.path.join(BASE_DIR, "model", "scaler.pkl"),
+    "data": os.path.join(BASE_DIR, "data", "data.csv"),
+    "pdf": os.path.join(BASE_DIR, "app", "preventions.pdf")
 }
+
+API_KEY = "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" 
+client = Groq(api_key=API_KEY)
 
 # ---------------- LOADERS ----------------
 @st.cache_data
@@ -73,56 +28,49 @@ def load_data(path):
     df['diagnosis'] = df['diagnosis'].map({'M': 1, 'B': 0})
     return df
 
+
 @st.cache_resource
 def load_model(model_path, scaler_path):
     model = pickle.load(open(model_path, "rb"))
     scaler = pickle.load(open(scaler_path, "rb"))
     return model, scaler
 
-# ---------------- INPUT UI ----------------
-def sidebar_inputs(data):
-    st.sidebar.markdown("## 🧾 Patient Measurements")
 
+# ---------------- INPUT ----------------
+def sidebar_inputs(data):
+    st.sidebar.header("Cell Measurements")
     features = data.drop('diagnosis', axis=1)
 
-    input_dict = {}
+    return {
+        col: st.sidebar.slider(
+            col,
+            float(features[col].min()),
+            float(features[col].max()),
+            float(features[col].mean())
+        ) for col in features.columns
+    }
 
-    # Grouping important features only (clean UI)
-    with st.sidebar.expander("🔬 Cell Size"):
-        for col in features.columns[:5]:
-            input_dict[col] = st.slider(col, float(features[col].min()), float(features[col].max()), float(features[col].mean()))
-
-    with st.sidebar.expander("📏 Texture & Shape"):
-        for col in features.columns[5:10]:
-            input_dict[col] = st.slider(col, float(features[col].min()), float(features[col].max()), float(features[col].mean()))
-
-    with st.sidebar.expander("🧪 Smoothness & Compactness"):
-        for col in features.columns[10:15]:
-            input_dict[col] = st.slider(col, float(features[col].min()), float(features[col].max()), float(features[col].mean()))
-
-    # Remaining features hidden but still used
-    for col in features.columns[15:]:
-        input_dict[col] = features[col].mean()
-
-    return input_dict
 
 # ---------------- MODEL ----------------
 def prepare_input(input_dict, scaler, feature_order):
     arr = np.array([input_dict[col] for col in feature_order]).reshape(1, -1)
     return scaler.transform(arr)
 
+
 def make_prediction(input_dict, model, scaler, feature_order):
     scaled = prepare_input(input_dict, scaler, feature_order)
     return model.predict(scaled)[0], model.predict_proba(scaled)[0]
+
 
 def calculate_accuracy(model, scaler, data):
     X = data.drop('diagnosis', axis=1)
     y = data['diagnosis']
     return accuracy_score(y, model.predict(scaler.transform(X))) * 100
 
+
 # ---------------- CHART ----------------
 def radar_chart(input_dict):
-    keys = list(input_dict.keys())[:10]
+    keys = [k for k in input_dict if "_mean" in k]
 
     fig = go.Figure()
     fig.add_trace(go.Scatterpolar(
@@ -131,16 +79,48 @@ def radar_chart(input_dict):
         fill='toself'
     ))
 
-    fig.update_layout(
-        polar=dict(bgcolor="#f4f7fb"),
-        showlegend=False
+    return fig
+
+
+# ---------------- AI ----------------
+def generate_initial_analysis(inputs, pred, probs, mode):
+    style = "simple" if mode == "Basic" else "detailed"
+
+    prompt = f"""
+    Prediction: {'Malignant' if pred else 'Benign'}
+    Probabilities: {probs}
+
+    Explain in a {style} way.
+    Include meaning, risk, next steps, and prevention.
+    Say clearly this is NOT a diagnosis.
+    """
+
+    response = client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.5
     )
 
-    return fig
+    return response.choices[0].message.content
+
+
+def chat_reply(messages):
+    response = client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=[
+            {"role": "system", "content": "You are a helpful medical assistant."},
+            *messages
+        ],
+        temperature=0.5
+    )
+
+    return response.choices[0].message.content
+
 
 # ---------------- MAIN ----------------
 def main():
-    # Load
+    st.set_page_config(page_title="Breast Cancer Assistant", page_icon="🩺", layout="wide")
+
     data = load_data(PATHS["data"])
     model, scaler = load_model(PATHS["model"], PATHS["scaler"])
 
@@ -148,72 +128,79 @@ def main():
     inputs = sidebar_inputs(data)
     accuracy = calculate_accuracy(model, scaler, data)
 
-    # Header
-    st.markdown('<div class="title">🩺 Breast Cancer Risk Assistant</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">AI-powered screening support tool</div>', unsafe_allow_html=True)
-    st.warning("This tool is for educational purposes only. Always consult a doctor.")
+    st.title("🩺 Breast Cancer Risk Assistant")
+    st.caption("AI-powered model that estimates whether a tumor is benign or malignant based on cell measurements.")
+    st.warning("Not a medical diagnosis. Consult a doctor.")
+
+    # Chart
+    st.subheader("Cell Overview")
+    st.plotly_chart(radar_chart(inputs), use_container_width=True)
 
     # Prediction
     pred, probs = make_prediction(inputs, model, scaler, feature_order)
 
-    col1, col2 = st.columns([1, 2])
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Result", "Benign" if pred == 0 else "Malignant")
+    col2.metric("Malignant %", f"{probs[1]:.2f}")
+    col3.metric("Accuracy", f"{accuracy:.2f}%")
 
-    # ---------------- RESULT CARD ----------------
-    with col1:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">📊 Result Summary</div>', unsafe_allow_html=True)
+    # ---------------- AI ANALYSIS ----------------
+    st.markdown("---")
+    st.subheader("🤖 AI Analysis")
 
-        if pred == 0:
-            st.markdown('<div class="result-good">✅ Benign</div>', unsafe_allow_html=True)
+    mode = st.radio("Mode", ["Basic", "Detailed"], horizontal=True)
+
+    if "chat" not in st.session_state:
+        st.session_state.chat = []
+
+    # Initial analysis (ONLY ONCE)
+    if st.button("Generate Analysis"):
+        analysis = generate_initial_analysis(inputs, pred, probs, mode)
+        st.session_state.chat = [{"role": "assistant", "content": analysis}]
+
+    # Show chat
+    for msg in st.session_state.chat:
+        if msg["role"] == "assistant":
+            st.info(msg["content"])
         else:
-            st.markdown('<div class="result-bad">⚠️ Malignant</div>', unsafe_allow_html=True)
+            st.write(f"You: {msg['content']}")
 
-        st.progress(float(probs[1]))
-        st.write(f"Risk Level: {probs[1]*100:.2f}%")
+    # User input
+    user_input = st.text_input("Ask a follow-up question")
 
-        st.write(f"Model Accuracy: {accuracy:.2f}%")
-        st.markdown('</div>', unsafe_allow_html=True)
+    if user_input:
+        st.session_state.chat.append({"role": "user", "content": user_input})
 
-    # ---------------- CHART ----------------
-    with col2:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">📈 Cell Analysis</div>', unsafe_allow_html=True)
-        st.plotly_chart(radar_chart(inputs), use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        reply = chat_reply(st.session_state.chat)
 
-    # ---------------- NEXT STEPS ----------------
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">🧾 Recommended Next Steps</div>', unsafe_allow_html=True)
+        st.session_state.chat.append({"role": "assistant", "content": reply})
+        st.rerun()
 
-    if pred == 1:
-        st.error("Consult a certified oncologist immediately for further diagnostic tests.")
-    else:
-        st.success("Maintain regular screenings and a healthy lifestyle.")
-
-    st.write("""
-    • Schedule a medical check-up  
-    • Do not rely only on this tool  
-    • Follow professional medical advice  
-    """)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # ---------------- FAQ ----------------
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">❓ FAQ</div>', unsafe_allow_html=True)
+    # FAQ
+    st.markdown("---")
+    st.subheader("FAQ")
 
     with st.expander("Is this a diagnosis?"):
-        st.write("No. This is only an AI-based prediction.")
+        st.write("No, it's only a prediction.")
 
     with st.expander("How accurate is this?"):
-        st.write("The model is trained on historical data but is not 100% reliable.")
+        st.write("Model accuracy is high but not perfect.")
+
+    with st.expander("How accurate is this model?"):
+        st.write(
+            "The model provides an estimate based on historical data and patterns. "
+            "While it may show high accuracy, it is not perfect and should not be relied "
+            "on for medical decisions. Always consult a healthcare professional."
+        )
 
     with st.expander("What should I do next?"):
-        st.write("Always consult a qualified doctor for medical decisions.")
+        st.write("Consult a doctor for proper testing.")
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    # PDF
+    if os.path.exists(PATHS["pdf"]):
+        with open(PATHS["pdf"], "rb") as f:
+            st.download_button("Download Guide", f, "guide.pdf")
 
 
-# ---------------- RUN ----------------
 if __name__ == "__main__":
     main()
