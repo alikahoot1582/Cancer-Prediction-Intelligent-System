@@ -17,7 +17,7 @@ PATHS = {
     "pdf": os.path.join(BASE_DIR, "app", "preventions.pdf")
 }
 
-API_KEY = "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" 
+API_KEY = "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" 
 client = Groq(api_key=API_KEY)
 
 # ---------------- LOADERS ----------------
